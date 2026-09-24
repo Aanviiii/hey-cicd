@@ -207,8 +207,8 @@ jobs:
 
       - name: Update deployment with new image tag
         run: |
-          # Replace 'latest' with the specific git sha we just pushed
-          sed -i "s|image: nensiravaliya28/hey-cicd:latest|image: nensiravaliya28/hey-cicd:${{ github.sha }}|g" k8s/deployment.yaml
+          # Replace '__IMAGE_TAG__' placeholder with the specific git sha we just pushed
+          sed -i "s|__IMAGE_TAG__|${{ github.sha }}|g" k8s/deployment.yaml
 
       - name: Deploy to Kubernetes
         run: |
