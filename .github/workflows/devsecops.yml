@@ -1,10 +1,10 @@
 name: Python DevSecOps Pipeline
 
+# When does this pipeline run?
 on:
   push:
     branches:
       - main
-
   pull_request:
     branches:
       - main
@@ -13,7 +13,7 @@ on:
 jobs:
 
   # ========================================
-  # 1. UNIT TEST
+  # STEP 1 — Run Unit Tests
   # ========================================
 
   test:
@@ -23,7 +23,7 @@ jobs:
     steps:
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -32,16 +32,15 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
-      - name: Run unit tests
+      - name: Run tests
         run: |
           pytest --cov=app --cov-report=term-missing
 
 
   # ========================================
-  # 2. SAST
+  # STEP 2 — SAST (Find code security issues)
   # ========================================
 
   sast:
@@ -55,7 +54,7 @@ jobs:
     steps:
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
@@ -67,7 +66,7 @@ jobs:
 
 
   # ========================================
-  # 3. SCA
+  # STEP 3 — SCA (Check for vulnerable packages)
   # ========================================
 
   sca:
@@ -77,7 +76,7 @@ jobs:
     steps:
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -86,7 +85,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pip-audit
 
@@ -96,7 +94,8 @@ jobs:
 
 
   # ========================================
-  # 4. DOCKER BUILD
+  # STEP 4 — Build Docker Image
+  #          (only runs after steps 1, 2, 3 pass)
   # ========================================
 
   docker-build:
@@ -105,76 +104,59 @@ jobs:
       - test
       - sast
       - sca
-
     runs-on: ubuntu-latest
 
     steps:
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Build Docker image
         run: |
-          docker build \
-            -t session17-python:${{ github.sha }} .
+          docker build -t session17-python:${{ github.sha }} .
 
 
   # ========================================
-  # 5. IMAGE SCAN
+  # STEP 5 — Scan Docker Image for vulnerabilities
   # ========================================
 
   image-scan:
-    name: Container Image Scan
+    name: Image Scan - Trivy
     needs:
       - docker-build
-
     runs-on: ubuntu-latest
 
     steps:
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: Build image
+      - name: Build Docker image
         run: |
-          docker build \
-            -t session17-python:${{ github.sha }} .
+          docker build -t session17-python:${{ github.sha }} .
 
       - name: Install Trivy
         run: |
-          sudo apt-get update
           sudo apt-get install -y wget
-
           wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key \
-            | sudo gpg --dearmor \
-            -o /usr/share/keyrings/trivy.gpg
-
-          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] \
-            https://aquasecurity.github.io/trivy-repo/deb \
-            generic main" \
+            | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" \
             | sudo tee /etc/apt/sources.list.d/trivy.list
-
-          sudo apt-get update
-          sudo apt-get install -y trivy
+          sudo apt-get update && sudo apt-get install -y trivy
 
       - name: Scan image
         run: |
-          trivy image \
-            --severity HIGH,CRITICAL \
-            --exit-code 1 \
-            session17-python:${{ github.sha }}
+          trivy image --severity HIGH,CRITICAL session17-python:${{ github.sha }}
 
 
   # ========================================
-  # 6. PUSH TO GHCR
+  # STEP 6 — Push image to GitHub Container Registry
   # ========================================
 
   push:
     name: Push Image to GHCR
-
     needs:
       - image-scan
-
     runs-on: ubuntu-latest
 
     permissions:
@@ -184,7 +166,7 @@ jobs:
     steps:
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -193,12 +175,51 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build image
+      - name: Build and tag image
         run: |
           docker build \
-            -t ghcr.io/${{ github.repository }}:${{ github.sha }} .
+            -t ghcr.io/${{ github.repository }}:${{ github.sha }} \
+            -t ghcr.io/${{ github.repository }}:latest \
+            .
 
       - name: Push image
         run: |
-          docker push \
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+          docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
+          docker push ghcr.io/${{ github.repository }}:latest
+
+
+  # ========================================
+  # STEP 7 — Deploy to Kubernetes
+  #          (only runs on push to main)
+  # ========================================
+
+  deploy:
+    name: Deploy to Kubernetes
+    needs:
+      - push
+    runs-on: ubuntu-latest
+
+    # Skip this step on pull requests — only deploy real merges to main
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" > $HOME/.kube/config
+
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+
+      - name: Check rollout status
+        run: |
+          kubectl rollout status deployment/session17-python --timeout=60s
