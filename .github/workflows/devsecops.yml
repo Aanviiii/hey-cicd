@@ -218,3 +218,15 @@ jobs:
       - name: Check rollout status
         run: |
           kubectl rollout status deployment/session17-python --timeout=60s
+
+      - name: Test running website in CI (Curl)
+        run: |
+          # Forward the service port to the GitHub runner in the background
+          kubectl port-forward service/session17-python 5001:80 &
+          sleep 3
+          
+          echo "🌐 Fetching the website HTML..."
+          curl -s http://localhost:5001 | head -n 15
+          
+          echo -e "\n\n🌐 Fetching the API status..."
+          curl -s http://localhost:5001/api/status
