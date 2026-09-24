@@ -202,13 +202,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v4
+      - name: Create k8s Kind Cluster (For testing deployment)
+        uses: helm/kind-action@v1.10.0
 
-      - name: Configure kubeconfig
+      - name: Update deployment with new image tag
         run: |
-          mkdir -p $HOME/.kube
-          echo "${{ secrets.KUBECONFIG }}" > $HOME/.kube/config
+          # Replace 'latest' with the specific git sha we just pushed
+          sed -i "s|image: nensiravaliya28/hey-cicd:latest|image: nensiravaliya28/hey-cicd:${{ github.sha }}|g" k8s/deployment.yaml
 
       - name: Deploy to Kubernetes
         run: |
