@@ -1,11 +1,5 @@
 # ⚡ hey-cicd — DevSecOps Dashboard
 
-> **Session 17 · Python + Flask + Docker + Kubernetes + GitHub Actions**
-
-A hands-on DevSecOps project that demonstrates how to build, test, secure, containerize, and deploy a Python web application using a fully automated CI/CD pipeline.
-
----
-
 ## 📁 Project Structure
 
 ```
@@ -88,10 +82,6 @@ http://localhost:5001
 pip install -r requirements-dev.txt
 python3 -m pytest --cov=app --cov-report=term-missing
 ```
-
-> **💡 Why `python3 -m pytest` and not just `pytest`?**
-> If you have Anaconda installed, typing `pytest` may use Anaconda's Python which doesn't have `pytest-cov` installed.
-> Using `python3 -m pytest` ensures pytest runs inside the same Python environment where you installed the packages.
 
 **Expected output:**
 ```
