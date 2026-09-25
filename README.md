@@ -155,6 +155,16 @@ docker rmi hey-cicd:latest
 
 # Run in background (detached mode)
 docker run -d -p 5001:5001 hey-cicd:latest
+
+
+#docker hub login
+docker login
+
+#tag image -- nensiravaliya28 is the docker hun username
+docker tag python-web:latest nensiravaliya28/python-web:latest
+
+#push image to docker hub
+docker push nensiravaliya28/python-web:latest
 ```
 
 ---
